@@ -5,12 +5,17 @@ import { loadStripe } from '@stripe/stripe-js';
 import "views/RiggsPDF.pdf";
 import * as pdfjsLib from 'pdfjs-dist';
 import './pdf.css';
+import './pdf_viewer.css';
 import  CognitoAuth  from "cognito/index.js";
+import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer';
+import pdffile from "./pdf.pdf";
+import "pdfjs-dist/lib/web/ui_utils.js";
 
 var myState = {
     pdf: null,
     currentPage: 1,
-    zoom: 2
+    zoom: 2,
+    searchText: ""
 }
 
 var amount = 0
@@ -56,6 +61,7 @@ async function searchText() {
     let startPage = arrayResultPages[0]
     myState.currentPage = startPage
     document.getElementById("current_page").value = startPage
+    myState.searchText = searchText
     render(myState)
   }
 }
@@ -159,6 +165,23 @@ function render(myState) {
         page.render({
             canvasContext: ctx,
             viewport: viewport,
+        }).promise.then(() => {
+            return page.getTextContent();
+        }).then((textContent) => {
+            const textLayer = document.getElementsByClassName("textLayer")[0]
+            
+            const pdf_canvas = document.getElementById("pdf_renderer")
+            const canvas_offset_top = pdf_canvas.offsetTop
+            const canvas_offset_left = pdf_canvas.offsetLeft
+            const canvas_height = pdf_canvas.height 
+            const canvas_width = pdf_canvas.width
+            textLayer.setAttribute('style', `left: ${canvas_offset_left}px; top: ${canvas_offset_top}px; height: ${canvas_height}px; width: ${canvas_width}px`)
+            pdfjsLib.renderTextLayer({
+                textContent: textContent,
+                container: textLayer,
+                viewport: viewport,
+                textDivs: []
+            })
         });
         setupAnnotations(page, viewport, canvas, ctx, myState.zoom)
     });
@@ -317,7 +340,7 @@ function Studentreader() {
               .then((resp) => resp.json())
               .then((resp) => {
                   console.log('ebook ', resp)
-                  pdfjsLib.getDocument(resp.body).promise.then(async function (doc) {
+                  pdfjsLib.getDocument(pdffile).promise.then(async function (doc) {
                     var pages = []; while (pages.length < doc.numPages) {pages.push(pages.length + 1);
                       // create a div for each page and build a small canvas for it
                       let num = pages.length
@@ -329,7 +352,7 @@ function Studentreader() {
                       });
                     }
                   }).catch(console.error);
-                  const loadingTask = pdfjsLib.getDocument(resp.body);
+                  const loadingTask = pdfjsLib.getDocument(pdffile);
 
                   loadingTask.promise.then(function(pdf) {
                       pdf.getOutline().then((outline) => {
@@ -573,8 +596,9 @@ function Studentreader() {
 
         <div id="canvas_container" style={canvasStyle}>
           <canvas id="pdf_renderer"></canvas>
+          <div className="textLayer"></div>
           <div id="preview-step-controller">
-            <label for="cars">Choose range:</label>
+            <label htmlFor="cars">Choose range:</label>
             <select name="preview-range" id="range-control">
               <option value="1">1-100</option>
               <option value="100">101-200</option>
